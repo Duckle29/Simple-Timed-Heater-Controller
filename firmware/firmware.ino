@@ -37,7 +37,7 @@ int buzzer = 4;
 
 // Integers used in the program
 int backLightDelay = 15*1000;
-int buzzMs = 30;
+int buzzMs = 5;
 
 int doubleclickInterval = 200; // Time in milliseconds you have to click again for it to be a double click
 int pressDurationLong = 1000; // Time in milliseconds to press the button for it to be read as a long press
@@ -49,17 +49,25 @@ int buzzInterval = 3000; // Time between buzzes in ms when the heater is about t
 int encVal = 0;
 int lastEncVal = 0;
 int tempC;
-int hysterisis;
+int hysterisis = 2;
 int btnStates[] = {0,0};
 int buttons[] = {encBtn, extBtn};
+
+// Temperature related control
+float lastTempC = 0;
+unsigned long tempChangedMs = 0;
+unsigned long tempSettleTimeMs = 5*1000;
+bool initialReadingDone = false;
+
+
 
 // The set temperature (Using a byte, as I will only need two digit numbers, then it's easier to store in EEPROM)
 byte setTemp = 8;
 
 // Booleans
-boolean lastEncBtnState = false;
-boolean lastExtBtnState = false;
-boolean heaterState = false;
+bool lastEncBtnState = false;
+bool lastExtBtnState = false;
+bool heaterState = false;
 bool lastPinReading[] = {true, true};
 
 // Different millis based delay effects
@@ -75,6 +83,7 @@ unsigned long lastBtnClickMs[] = {0,0};
 unsigned long lastMenuAction = 0;
 unsigned long buzzStart = 0;
 unsigned long lastBuzz = 0;
+
 // Variables related to EEPROM
 int offTempAdr = 0;
 int onTempAdr = 2;
@@ -159,7 +168,11 @@ MAIN CODE UNDER HERE
 void loop()
 {
   // Update the button state
-  tempC = analogRead(tempSens) * 1.07421875 /10; // Get the ambient temperature
+  float tempTest = readTemp(tempSens);
+  if(tempTest != -1.0)
+  {
+    tempC = (int)tempTest;
+  }
   encVal = ENC0.read();
   displayControl();
   backlightManager();
@@ -179,6 +192,36 @@ void loop()
 /*------------------------------
 FUNCTIONS UNDER HERE
 ------------------------------*/
+
+float readTemp(int pin)
+{
+  int reading = analogRead(pin);
+  float tempReadingC = (float)reading * 1100/1023 /10;
+
+  if(tempC != lastTempC)
+  {
+    tempChangedMs = millis();
+    lastTempC = tempC;
+  }
+
+  if(millis() - tempChangedMs > tempSettleTimeMs)
+  {
+    return tempReadingC;
+  }
+  else
+  {
+    if(!initialReadingDone)
+    {
+      initialReadingDone = true;
+      return tempReadingC;
+    }
+    else
+    {
+      return -1.0;
+    }
+  }
+
+}
 
 // Function that controlls heater related functions, including the timing.
 void heaterControl()
